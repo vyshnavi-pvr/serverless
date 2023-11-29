@@ -1,0 +1,4 @@
+requests
+urllib3
+google-cloud-storage
+boto3
