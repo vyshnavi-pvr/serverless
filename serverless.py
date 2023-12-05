@@ -7,17 +7,19 @@ from google.cloud import storage
 from google.oauth2 import service_account
 from botocore.exceptions import ClientError
 
-bucket_name = 'csye-mybucket'
+bucket_name = os.environ.get("BUCKET_NAME")
+dynamodb_name = os.environ.get("DYNAMODB_TABLE_NAME")
 gcp_secret_name = "gcs_cred"
 region_name='us-east-1'
 
 def send_status_message(message_id,from_email, to_email, message):
     
     mailgun_api_key = get_secret("mailgun/api/key", region_name)
+    mailgun_api = get_secret("mailgunapi", region_name)
 
     print(f"send_status_message({message_id},{from_email},{to_email},{message})")
     response = requests.post(
-        "https://api.mailgun.net/v3/vyshnavi2024.me/messages",
+        mailgun_api,
         auth=("api", mailgun_api_key),
         data={"from": from_email,
               "to": [to_email],
@@ -30,7 +32,7 @@ def send_status_message(message_id,from_email, to_email, message):
               
 def send_dynamodb_message(id, message, from_email, to_email):
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table('csye-email-table-4798138')
+    table = dynamodb.Table(dynamodb_name)
     item = {
         'id': id,
         'from': from_email,
@@ -144,7 +146,7 @@ def release_code(url=None, submission_id=None, local_filename=None, user_release
             send_status_message(submission_id, from_email, to_email, f"Uploaded {filename} to {bucket_name}/{user_release}/{filename}")
             return True
         else:
-            send_status_message(submission_id, from_email, to_email, f"Download failed for {url}")
+            send_status_message(submission_id, from_email, to_email, f"Download failed for {url} with submission id {submission_id} by {to_email}")
             print(f"Download failed with status code: {response.status_code}")
             return False
     except Exception as e:
@@ -174,12 +176,16 @@ def lambda_handler(event, context):
             for key in attributes:
                 print(f"{key}: {attributes[key]['Value']}")
 
-            #release_code("https://github.com/krishna295/python_colabs/blob/main/Computer_Fundamentals.ipynb", "/tmp/Computer_Fundamentals.ipynb")
-            release_code(release_code_file, submission_id, f"/tmp/{release_tag}", user_release, from_email, to_email)
+            release_code(release_code_file, submission_id, f"/tmp/{release_tag}", user_release,release_tag, from_email, to_email)
             response = send_status_message(submission_id, from_email, to_email, sns_message)
             #print(f"MAIL GUN Response{response}")
 
         print("Received message attributes: " + json.dumps(attributes, indent=2) )
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Lambda processed successfully')
+    }
 
     return {
         'statusCode': 200,
